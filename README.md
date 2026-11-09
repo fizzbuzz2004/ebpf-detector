@@ -1,10 +1,10 @@
-# eBPF Detector — Rust + Aya
+﻿# eBPF Detector — Rust + Aya
 
-Ein Linux-Kernel-Telemetrie- und Detektionssensor in Rust. Der aktuelle Ausbau erfasst `execve` und `execveat` (inklusive fehlgeschlagener Syscalls und bestätigter Image-Wechsel), Fork-/Exit-Beziehungen, Kernel-Modul-Ladeversuche und bestätigte Modul-Ladeereignisse sowie `getdents64`-Metadaten. Die Ereignisse laufen über einen gemeinsamen BPF-Ring-Buffer in einen asynchronen Tokio-Daemon.
+A Linux kernel telemetry and detection sensor written in Rust. The current implementation captures `execve` and `execveat` activity (including failed syscalls and confirmed image replacement), fork/exit relationships, kernel module loading attempts and confirmed module-load events, and `getdents64` metadata. Events flow from a shared BPF ring buffer into an asynchronous Tokio daemon.
 
-> **Reifegrad:** Security-Research-/Portfolio-Prototyp. Das Projekt ist noch kein zertifizierter EDR und kein vollständiger Rootkit- oder DKOM-Detektor. Es verändert keine Kernelstrukturen und versucht nicht, Rootkits aktiv zu entfernen.
+> **Maturity level:** Security-research / portfolio prototype. This project is not a certified EDR and is not yet a complete rootkit or DKOM detector. It does not modify kernel structures and does not attempt to actively remove rootkits.
 
-## Architektur
+## Architecture
 
 ```mermaid
 flowchart LR
@@ -32,9 +32,9 @@ flowchart LR
     R --> U[detector-userspace<br/>Tokio AsyncFd]
     L --> U
     X --> U
-    U --> V[ABI / Länge / Version validieren]
-    V --> H[Prozess- und Modul-Korrelation]
-    H --> J[JSON Logs via tracing]
+    U --> V[ABI / length / version validation]
+    V --> H[Process and module correlation]
+    H --> J[JSON logs via tracing]
     CMM[detector-common<br/>repr(C) ABI v2] --- P
     CMM --- V
 ```
@@ -65,63 +65,63 @@ ebpf-detector/
         └── src/main.rs
 ```
 
-### Verantwortlichkeiten
+### Responsibilities
 
-- **`detector-common`:** `no_std`-fähige Draht-ABI mit `#[repr(C)]`, festen Integern, `bytemuck::Pod`, Event-Header, ABI-Version und Compile-Time-Größenassertions.
-- **`detector-ebpf`:** Aya-eBPF-Programme für Tracepoints. Das Programm kopiert nur begrenzte Metadaten; keine dynamischen Rust-Allokationen und keine Kernel- oder Userspace-Pointer werden in Events ausgegeben.
-- **`detector-userspace`:** Aya Loader, Layout-Preflight über tracefs, Tokio `AsyncFd` Ring-Buffer-Reader, Parser mit exakter ABI-Längenprüfung, Prozess-Korrelation, Heuristiken und JSON-Logs.
+- **`detector-common`:** `no_std`-capable wire ABI using `#[repr(C)]`, fixed-size integers, `bytemuck::Pod`, event headers, ABI versioning, and compile-time size assertions.
+- **`detector-ebpf`:** Aya eBPF programs for tracepoints. The program copies only bounded metadata; no dynamic Rust allocations and no kernel or userspace pointers are emitted in events.
+- **`detector-userspace`:** Aya loader, tracefs layout preflight, Tokio `AsyncFd` ring-buffer reader, parser with strict ABI length checks, process correlation, heuristics, and JSON logging.
 
-Aya ist für diesen Workspace auf `aya = 0.14.0`, `aya-ebpf = 0.2.1` und `aya-build = 0.2.1` festgelegt. Das Build-Skript pinnt `bpf-linker` auf `0.12.0`. Für reproduzierbare Dependency-Auflösung muss die beim ersten Cargo-Build erzeugte `Cargo.lock` mit ins Repository committed werden.
+Aya is pinned for this workspace to `aya = 0.14.0`, `aya-ebpf = 0.2.1`, and `aya-build = 0.2.1`. The build script pins `bpf-linker` to `0.12.0`. For reproducible dependency resolution, the `Cargo.lock` generated during the first Cargo build should be committed to the repository.
 
-## Erfasste Signale
+## Captured Signals
 
 | Probe | Signal | Interpretation |
 |---|---|---|
-| `syscalls:sys_enter_execve` | PID/TID, UID/GID, `comm`, Pfad, bis zu vier Argumente | `execve`-Versuch, noch kein Erfolgsbeweis |
-| `syscalls:sys_enter_execveat` | Pfad und begrenzte Argumente aus den generischen Syscall-Argumenten | `execveat`-Versuch; `dirfd` und `at_flags` werden derzeit nicht in der ABI gespeichert |
-| `syscalls:sys_exit_execve` / `sys_exit_execveat` | Rückgabewert und errno bei Rückkehr | protokolliert fehlgeschlagene Exec-Syscalls; erfolgreiche Image-Wechsel werden separat bestätigt |
-| `sched:sched_process_exec` | erfolgreicher Image-Wechsel, PID/TID, `old_pid`, `comm` | Kernel bestätigt erfolgreiches Exec; wird anhand `old_pid` auch bei TID-Wechseln korreliert |
-| `sched:sched_process_fork` | Parent-/Child-TID und `comm` | kurzfristiger Parent-Child-Kontext |
-| `sched:sched_process_exit` | Task-Ende | entfernt Korrelationszustand |
-| `syscalls:sys_enter/exit_init_module` | `init_module`-Versuch und Rückgabewert | Erfolg wird anhand des Syscall-Exit beurteilt |
-| `syscalls:sys_enter/exit_finit_module` | `finit_module`-Versuch und Rückgabewert | Erfolg wird anhand des Syscall-Exit beurteilt |
-| `module:module_load` | Kernel-Modul ist geladen, Taint-Bits, `comm` | unabhängiges Erfolgsereignis des Kernel-Tracepoints |
-| `syscalls:sys_enter/exit_getdents64` | FD, angeforderte und zurückgegebene Bytezahl | Verzeichnis-Enumeration-Metadaten, kein Inhaltsscan |
+| `syscalls:sys_enter_execve` | PID/TID, UID/GID, `comm`, path, up to four arguments | `execve` attempt; no success proof yet |
+| `syscalls:sys_enter_execveat` | Path and bounded arguments from generic syscall arguments | `execveat` attempt; `dirfd` and `at_flags` are not currently stored in the ABI |
+| `syscalls:sys_exit_execve` / `sys_exit_execveat` | Return value and errno upon return | Logs failed exec syscalls; successful image replacement is confirmed separately |
+| `sched:sched_process_exec` | successful image replacement, PID/TID, `old_pid`, `comm` | Kernel confirms successful exec; correlated by `old_pid` even when TIDs change |
+| `sched:sched_process_fork` | parent/child TID and `comm` | short-lived parent-child context |
+| `sched:sched_process_exit` | task exit | clears correlation state |
+| `syscalls:sys_enter/exit_init_module` | `init_module` attempt and return value | success determined from syscall exit |
+| `syscalls:sys_enter/exit_finit_module` | `finit_module` attempt and return value | success determined from syscall exit |
+| `module:module_load` | kernel module loaded, taint bits, `comm` | separate successful kernel tracepoint event |
+| `syscalls:sys_enter/exit_getdents64` | FD, requested and returned byte count | directory enumeration metadata; not a content scan |
 
-### ABI und Datenverlust
+### ABI and Data Loss
 
-Jedes Event beginnt mit einem 16-Byte-`EventHeader`. ABI-Version, Event-Typ, Flags und monotonic Kernel-Timestamp werden vor der Event-spezifischen Dekodierung geprüft. Änderungen an den Structs erfordern eine Erhöhung von `ABI_VERSION`.
+Each event begins with a 16-byte `EventHeader`. ABI version, event type, flags, and the monotonic kernel timestamp are validated before event-specific decoding. Any change to the structs requires increasing `ABI_VERSION`.
 
-Der Ring-Buffer ist global und 16 MiB groß. Er ermöglicht CPU-übergreifende Event-Reihenfolge; bei fehlendem freien Platz kann eine Reservierung dennoch fehlschlagen. Daher gibt es zwei `PerCpuArray`-Zähler:
+The ring buffer is global and 16 MiB in size. It allows CPU-crossing event ordering; if capacity is exhausted, a reservation may still fail. For this reason, there are two `PerCpuArray` counters:
 
-- `LOST_EVENTS`: Ein Event konnte wegen nicht verfügbarer Ring-Buffer-Kapazität nicht reserviert werden.
-- `PROBE_ERRORS`: Ein Probe konnte einen benötigten Wert aus dem Tracepoint-Kontext nicht lesen.
+- `LOST_EVENTS`: An event could not be reserved because the ring buffer had no available capacity.
+- `PROBE_ERRORS`: A probe could not read a required value from the tracepoint context.
 
-Der Daemon summiert beide Zähler alle fünf Sekunden und gibt Deltas als strukturierte Warnungen aus. `PROBE_ERRORS` umfasst Tracepoint-Lese- und `comm`-Helper-Fehler; User-Pointer-Lesefehler der Exec-Probe werden direkt am jeweiligen Event markiert. Parent-, Exec-, Modul- und Verzeichnis-Korrelationszustände haben harte Größenlimits und monotone TTL-Ablaufzeiten; abgelaufene Einträge werden regelmäßig entfernt. Bei Cache-Druck werden in begrenzten Batches die ältesten Korrelationen entfernt, statt den gesamten Kontext zu löschen. Das ist Verlusttransparenz, keine Zero-Drop-Garantie. <https://docs.rs/aya/0.14.0/aya/maps/ring_buf/struct.RingBuf.html>
+The daemon sums both counters every five seconds and emits deltas as structured warnings. `PROBE_ERRORS` includes tracepoint read and `comm` helper failures; user-pointer read errors from the exec probe are flagged directly on the event itself. Parent, exec, module, and directory correlation state each have hard size limits and monotonic TTL expirations; expired entries are regularly removed. Under cache pressure, the oldest correlations are evicted in bounded batches rather than dropping the entire context. This is loss transparency, not a zero-drop guarantee. <https://docs.rs/aya/0.14.0/aya/maps/ring_buf/struct.RingBuf.html>
 
-## Detektionslogik und Grenzen
+## Detection Logic and Limits
 
-1. **Exec-Korrelation:** `sys_enter_execve` und `sys_enter_execveat` protokollieren den Versuch. Fehlgeschlagene Syscalls werden am jeweiligen `sys_exit` mit errno sichtbar; `sched_process_exec` bestätigt erfolgreiche Image-Wechsel. Für Execs aus Nicht-Leader-Threads wird `old_pid` zur Korrelation verwendet. Wenn das Entry-Event wegen Buffer-Druck fehlt, bleibt das Erfolgsereignis als `unpaired` sichtbar.
-2. **Parent-Child-Heuristik:** Ein Root-Prozess, der aus `/tmp`, `/var/tmp` oder `/dev/shm` startet und dessen beobachteter Parent ein Shell-/Interpreter-Prozess ist, erhält einen heuristischen Alarm. Das ist ein Signal mit möglicher False-Positive-Rate, keine Rootkit-Feststellung.
-3. **Kernel-Module:** Syscall-Entry/Exit zeigt Versuche und Return-Code. `module:module_load` liefert ein separates Kernel-Erfolgsereignis und Taint-Metadaten. Die Modulnamen werden in dieser ABI-Version absichtlich noch nicht aus dem dynamischen `data_loc`-Feld ausgelesen. Das `module_load`-Event wird über die TID mit einem noch offenen `init_module`-/`finit_module`-Versuch korreliert, sofern beide Events beobachtet wurden.
-4. **`getdents64`:** Erfasst FD, angeforderte Puffergröße und Rückgabegröße. Eine Rückgabe größer als der angeforderte Puffer wird als Integritätsanomalie markiert. Das Event liest keine `dirent`-Namen und kann für sich allein keine versteckten Dateien beweisen.
-5. **DKOM:** Es gibt noch keine unabhängige Task- oder Dateisystem-Inventarisierung. Belastbare Hidden-Process-Erkennung erfordert eine zweite Kernel-Sicht, etwa BTF-/CO-RE-basierte Task-Enumeration, sowie Namespace-, Race- und False-Positive-Behandlung. Ein Userspace-`ps`/`/proc`-Vergleich allein ist keine unabhängige Wahrheit, wenn der Kernel kompromittiert ist.
-6. **Datenschutz:** Argumente können Geheimnisse enthalten. Die Userspace-Redaktion maskiert einige verbreitete `--password`-/`--token`-/`secret=`-Muster, ist aber keine vollständige DLP-Policy. Vor dem Produktivbetrieb müssen Redaktionsregeln, Aufbewahrung und Log-Zugriff festgelegt werden.
+1. **Exec correlation:** `sys_enter_execve` and `sys_enter_execveat` record the attempt. Failed syscalls become visible at the matching `sys_exit` with errno; `sched_process_exec` confirms successful image replacements. For execs from non-leader threads, `old_pid` is used for correlation. If the entry event is missing due to buffer pressure, the success event remains visible as `unpaired`.
+2. **Parent-child heuristic:** A root process launched from `/tmp`, `/var/tmp`, or `/dev/shm` whose observed parent is a shell or interpreter process produces a heuristic alert. This is an indicator with a possible false-positive rate, not a rootkit finding.
+3. **Kernel modules:** Syscall entry/exit shows attempts and return codes. `module:module_load` produces a separate kernel success event and taint metadata. Module names are intentionally not extracted from the dynamic `data_loc` field in this ABI version. The `module_load` event is correlated by TID with an open `init_module` / `finit_module` attempt when both events are observed.
+4. **`getdents64`:** Captures FD, requested buffer size, and returned size. A return value larger than the requested buffer is flagged as an integrity anomaly. The event does not read `dirent` names and cannot prove hidden files by itself.
+5. **DKOM:** There is still no independent task or filesystem inventory. Robust hidden-process detection requires a second kernel view, such as BTF/CO-RE-based task enumeration, plus namespace, race, and false-positive handling. A userspace `ps` / `/proc` comparison alone is not independent truth when the kernel may be compromised.
+6. **Privacy:** Arguments may contain secrets. Userspace redaction masks common `--password` / `--token` / `secret=` patterns, but it is not a complete DLP policy. Before production deployment, redaction rules, retention policy, and log access controls must be defined.
 
-## Voraussetzungen
+## Requirements
 
-Zielbaseline: Ubuntu 24.04 LTS x86_64 mit Kernel 6.8 oder ein Kernel, dessen Tracepoint-Felder exakt den unterstützten Layouts entsprechen.
+Target baseline: Ubuntu 24.04 LTS x86_64 with Linux 6.8 or a kernel whose tracepoint fields exactly match the supported layouts.
 
-- Linux Kernel **>= 5.8** (BPF Ring Buffer).
-- Tracefs unter `/sys/kernel/tracing` oder `/sys/kernel/debug/tracing`.
-- Kernel-Tracepoints für `syscalls`, `sched` und `module`; `CONFIG_MODULES` für Modul-Ladeereignisse.
-- Rust stable und Rust nightly mit `rust-src`.
-- `clang`, `llvm-ar`, `pkg-config`, `libelf-dev`, `build-essential`.
-- Root für den Lab-Start oder ein eng zugeschnittenes, kernel- und distributionsabhängiges Capability-Setup.
+- Linux kernel **>= 5.8** (BPF ring buffer).
+- Tracefs mounted at `/sys/kernel/tracing` or `/sys/kernel/debug/tracing`.
+- Tracepoints for `syscalls`, `sched`, and `module`; `CONFIG_MODULES` for module-load events.
+- Rust stable and Rust nightly with `rust-src`.
+- `clang`, `llvm-ar`, `pkg-config`, `libelf-dev`, and `build-essential`.
+- Root for lab startup or a tightly scoped, kernel- and distribution-dependent capability setup.
 
-BTF ist für die derzeitigen festen Tracepoint-Probes nicht zwingend erforderlich. Es wird für zukünftige BTF-/CO-RE-basierte unabhängige Kernel-Inventarisierung benötigt bzw. dringend empfohlen.
+BTF is not required for the current fixed tracepoint probes. It is needed or strongly recommended for future BTF/CO-RE-based independent kernel inventorying.
 
-## Installation und Build auf Ubuntu 24.04
+## Installation and Build on Ubuntu 24.04
 
 ```bash
 sudo apt update
@@ -134,29 +134,29 @@ cd ebpf-detector
 ./scripts/build.sh
 ```
 
-Das Skript prüft die Linux-Umgebung und Native-Tools, installiert stable sowie nightly mit `rust-src`, installiert `bpf-linker 0.12.0` und baut `detector-userspace`. Der `build.rs`-Schritt verwendet `aya-build`, kompiliert `detector-ebpf` für BPF und bettet das resultierende ELF in den Daemon ein.
+The script checks the Linux environment and native tools, installs stable and nightly with `rust-src`, installs `bpf-linker 0.12.0`, and builds `detector-userspace`. The `build.rs` step uses `aya-build`, compiles `detector-ebpf` for BPF, and embeds the resulting ELF into the daemon.
 
-Zum Start:
+To start:
 
 ```bash
 sudo RUST_LOG=info ./target/release/detector-userspace
 ```
 
-Mehr Details:
+For more details:
 
 ```bash
 sudo RUST_LOG=debug ./target/release/detector-userspace
 ```
 
-Vor dem Attach prüft der Loader für alle 14 Tracepoints die erwarteten Feldnamen, Offsets und Größen anhand ihrer `format`-Dateien. Ein unbekanntes Layout führt absichtlich zum Abbruch. Tracepoint-Formate sind die vom Kernel bereitgestellte Beschreibung des Event-Records. <https://docs.kernel.org/trace/events.html>
+Before attaching, the loader validates all 14 tracepoints for the expected field names, offsets, and sizes using their `format` files. An unknown layout intentionally aborts the load. Tracepoint formats are the kernel-provided description of the event record. <https://docs.kernel.org/trace/events.html>
 
-Falls tracefs nicht gemountet ist:
+If tracefs is not mounted:
 
 ```bash
 sudo mount -t tracefs tracefs /sys/kernel/tracing
 ```
 
-## Smoke-Test (Lab-VM empfohlen)
+## Smoke Test (lab VM recommended)
 
 Terminal 1:
 
@@ -170,22 +170,22 @@ Terminal 2:
 sudo ./scripts/smoke-test.sh
 ```
 
-Der Test führt normale Programme aus, traversiert `/etc`, startet `/usr/bin/true` aus einem temporären Verzeichnis unter Root und versucht mit `insmod` eine ungültige Textdatei als Modul zu laden. Er lädt **kein echtes Kernelmodul** und ändert keine Kernelparameter.
+The test runs normal programs, traverses `/etc`, starts `/usr/bin/true` from a temporary directory under root, and attempts to load an invalid text file as a module using `insmod`. It does not load a real kernel module and does not modify kernel parameters.
 
-Erwartete strukturierte Ereignisse:
+Expected structured events:
 
-- `exec_attempt` plus `process_exec` für erfolgreiche Prozessstarts.
-- `exec_failure` für den absichtlich fehlgeschlagenen `execve`-Aufruf.
-- `directory_enum` auf DEBUG-Level.
-- `root_exec_from_writable_path` oder `root_child_exec_from_writable_path` für den absichtlich ungewöhnlichen Root-Start aus `/tmp`.
-- `module_syscall_attempt` und ein fehlgeschlagenes `module_syscall_result`, falls `insmod` installiert ist.
-- Ein `module_load`-Event erscheint nur bei einem tatsächlich erfolgreichen Kernel-Modulladevorgang; der Smoke-Test führt absichtlich keinen solchen Ladevorgang durch.
+- `exec_attempt` plus `process_exec` for successful process starts.
+- `exec_failure` for the intentionally failed `execve` call.
+- `directory_enum` at DEBUG level.
+- `root_exec_from_writable_path` or `root_child_exec_from_writable_path` for the intentionally unusual root launch from `/tmp`.
+- `module_syscall_attempt` and a failed `module_syscall_result` if `insmod` is installed.
+- A `module_load` event appears only during an actual successful kernel module load. The smoke test deliberately does not perform such a load.
 
-Für einen echten `module_load`-Integrationstest ausschließlich eine vertrauenswürdige, signierte Testmoduldatei in einer wegwerfbaren VM verwenden.
+For a real `module_load` integration test, use a trusted, signed test module in a disposable VM only.
 
-## systemd-Deployment (optional)
+## systemd Deployment (optional)
 
-Nach erfolgreichem Lab-Test:
+After successful lab testing:
 
 ```bash
 sudo install -D -m 0755 target/release/detector-userspace /usr/local/sbin/detector-userspace
@@ -195,9 +195,9 @@ sudo systemctl enable --now detector.service
 sudo journalctl -u detector.service -f
 ```
 
-Die Unit enthält ein Capability-Bounding-Set. `CAP_SYS_ADMIN` ist als Kompatibilitäts-Fallback enthalten und sollte nach Prüfung auf dem Zielkernel entfernt werden, falls `CAP_BPF`, `CAP_PERFMON` und `CAP_SYS_RESOURCE` ausreichen. Vor einem produktiven Rollout sind insbesondere Capability-Bedarf, Kernel-Lockdown, LSM-Regeln, Dienstisolation und Log-Retention auf der konkreten Distribution zu validieren.
+The unit includes a capability bounding set. `CAP_SYS_ADMIN` is present as a compatibility fallback and should be removed after validation on the target kernel if `CAP_BPF`, `CAP_PERFMON`, and `CAP_SYS_RESOURCE` are sufficient. Before production rollout, capability requirements, kernel lockdown, LSM policies, service isolation, and log retention must be validated for the specific distribution.
 
-## Qualitätssicherung
+## Quality Assurance
 
 ```bash
 cargo +stable fmt --all -- --check
@@ -205,15 +205,15 @@ cargo +stable test -p detector-common -p detector-userspace
 cargo +stable clippy -p detector-common -p detector-userspace --all-targets -- -D warnings
 ```
 
-GitHub Actions führt Format-, Build-, Test- und Clippy-Schritte auf Ubuntu 24.04 aus. Die Tests enthalten ABI-Größenassertions und Unit-Tests für Tracepoint-Format-Parsing sowie die Shell-Heuristik. Der BPF-Verifier-Test muss zusätzlich auf jeder unterstützten Kernelversion in einer VM laufen.
+GitHub Actions runs format, build, test, and Clippy steps on Ubuntu 24.04. The tests include ABI size assertions and unit tests for tracepoint format parsing and shell heuristics. The BPF verifier test must also run on every supported kernel version in a VM.
 
-## Security-Hardening-Backlog
+## Security Hardening Backlog
 
-- BTF-/CO-RE-gestützte Task-Inventarisierung und unabhängige Prozess-Sicht für DKOM-Signale.
-- VFS-/Mount-Namespace-kontextualisierte Datei-Integritätsprüfung; `getdents64`-Metadaten allein reichen nicht.
-- Modulname/Signatur-/Hash-Anreicherung und Abgleich mit `module_load`, `module_free` sowie Kernel-Trust-Policy.
-- `execveat`-Erweiterung um `dirfd` / `at_flags` sowie zusätzliche Prozessattribut-Korrelation.
-- Begrenzte, expiry-basierte User-Space-Caches und Metriken für Event-Latenz/Queue-Pressure.
-- Konfigurierbare Allow-/Deny-Policies, Datenminimierung und vollständige Secret-Redaktion.
-- Integrationstests unter Kernel 6.8, 6.11+, HWE-Kernels sowie ARM64, sofern diese Targets freigegeben werden.
-- Release-Signing, SBOM, Dependency-Audit, reproducible build pipeline und Kernel-Verifier-Regressionstests.
+- BTF/CO-RE-based task inventory and independent process visibility for DKOM signals.
+- VFS/mount-namespace contextual file-integrity checks; `getdents64` metadata alone is insufficient.
+- Module name/signature/hash enrichment and comparison against `module_load`, `module_free`, and kernel trust policy.
+- `execveat` extension to include `dirfd` / `at_flags` and extra process-attribute correlation.
+- Bounded, expiry-based userspace caches and metrics for event latency and queue pressure.
+- Configurable allow/deny policies, data minimization, and full secret redaction.
+- Integration tests under kernel 6.8, 6.11+, HWE kernels, and ARM64 if those targets are supported.
+- Release signing, SBOM, dependency audit, reproducible build pipeline, and kernel verifier regression tests.
