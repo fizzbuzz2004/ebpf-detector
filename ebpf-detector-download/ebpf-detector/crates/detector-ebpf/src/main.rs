@@ -65,7 +65,7 @@ fn make_header(event_type: u16) -> EventHeader {
         abi_version: ABI_VERSION,
         event_type,
         flags: 0,
-        timestamp_ns: bpf_ktime_get_ns(),
+        timestamp_ns: unsafe { bpf_ktime_get_ns() },
     }
 }
 
@@ -152,12 +152,12 @@ fn emit_exec_attempt(
     event.gid = (uid_gid >> 32) as u32;
 
     match bpf_get_current_comm() {
-        Ok(comm) => event.comm = comm,
+        Ok(comm) => event.comm = comm.into(),
         Err(_) => event.header.flags |= FLAG_COMM_READ_FAILED,
     }
 
     // SAFETY: BPF helper performs a fault-safe, bounded read from userspace.
-    match unsafe { bpf_probe_read_user_str_bytes(filename_ptr, &mut event.filename) } {
+    match unsafe { bpf_probe_read_user_str_bytes(filename_ptr, &mut event.filename[..]) } {
         Ok(path) => {
             if path.len() >= event.filename.len().saturating_sub(1) {
                 event.header.flags |= FLAG_PATH_TRUNCATED;
@@ -257,7 +257,7 @@ fn try_exec_result(ctx: TracePointContext, operation: u32) -> Result<(), i32> {
     event.uid = uid;
     event.result = result;
     match comm {
-        Ok(value) => event.comm = value,
+        Ok(value) => event.comm = value.into(),
         Err(_) => event.header.flags |= FLAG_COMM_READ_FAILED,
     }
     if comm_failed {
@@ -296,9 +296,9 @@ fn try_process_fork(ctx: TracePointContext) -> Result<(), i32> {
     event.header = make_header(EVENT_PROCESS_FORK);
     let (_, _, uid) = identity();
     event.uid = uid;
-    event.parent_comm = parent_comm;
+    event.parent_comm = parent_comm.into();
     event.parent_tid = parent_tid;
-    event.child_comm = child_comm;
+    event.child_comm = child_comm.into();
     event.child_tid = child_tid;
 
     record.submit(0);
@@ -331,7 +331,7 @@ fn try_process_exit(ctx: TracePointContext) -> Result<(), i32> {
     event.tid = tid;
     event.uid = uid;
     match comm {
-        Ok(value) => event.comm = value,
+        Ok(value) => event.comm = value.into(),
         Err(_) => event.header.flags |= FLAG_TRACEPOINT_READ_FAILED,
     }
     match task_pid {
@@ -373,7 +373,7 @@ fn try_process_exec(ctx: TracePointContext) -> Result<(), i32> {
         Err(_) => event.header.flags |= FLAG_TRACEPOINT_READ_FAILED,
     }
     match comm {
-        Ok(value) => event.comm = value,
+        Ok(value) => event.comm = value.into(),
         Err(_) => event.header.flags |= FLAG_COMM_READ_FAILED,
     }
     if read_failed {
@@ -411,7 +411,7 @@ fn try_module_load(ctx: TracePointContext) -> Result<(), i32> {
         Err(_) => event.header.flags |= FLAG_TRACEPOINT_READ_FAILED,
     }
     match comm {
-        Ok(value) => event.comm = value,
+        Ok(value) => event.comm = value.into(),
         Err(_) => event.header.flags |= FLAG_COMM_READ_FAILED,
     }
     if read_failed {
@@ -455,7 +455,7 @@ fn try_module_syscall_enter(ctx: TracePointContext, operation: u32) -> Result<()
     event.tid = tid;
     event.uid = uid;
     match comm {
-        Ok(value) => event.comm = value,
+        Ok(value) => event.comm = value.into(),
         Err(_) => event.header.flags |= FLAG_COMM_READ_FAILED,
     }
     match args {
@@ -514,7 +514,7 @@ fn try_module_syscall_exit(ctx: TracePointContext, operation: u32) -> Result<(),
     event.uid = uid;
     event.result = result;
     if let Ok(value) = comm {
-        event.comm = value;
+        event.comm = value.into();
     } else {
         event.header.flags |= FLAG_COMM_READ_FAILED;
     }
@@ -556,7 +556,7 @@ fn try_getdents_enter(ctx: TracePointContext) -> Result<(), i32> {
         Err(_) => event.header.flags |= FLAG_SYSCALL_ARGS_READ_FAILED,
     }
     match comm {
-        Ok(value) => event.comm = value,
+        Ok(value) => event.comm = value.into(),
         Err(_) => event.header.flags |= FLAG_COMM_READ_FAILED,
     }
     if read_failed {
@@ -592,7 +592,7 @@ fn try_getdents_exit(ctx: TracePointContext) -> Result<(), i32> {
     event.uid = uid;
     event.returned_bytes = returned_bytes;
     match comm {
-        Ok(value) => event.comm = value,
+        Ok(value) => event.comm = value.into(),
         Err(_) => event.header.flags |= FLAG_COMM_READ_FAILED,
     }
     if comm_failed {

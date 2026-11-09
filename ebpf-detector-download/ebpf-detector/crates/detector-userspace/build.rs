@@ -27,6 +27,7 @@ fn main() -> anyhow::Result<()> {
         features: &[],
     };
 
+    std::env::set_var("CARGO_PROFILE_RELEASE_PANIC", "abort");
     build_ebpf([package], Toolchain::Nightly)
         .context("eBPF-Build mit aya-build ist fehlgeschlagen")?;
 

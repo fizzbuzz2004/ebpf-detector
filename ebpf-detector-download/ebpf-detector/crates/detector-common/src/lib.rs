@@ -10,6 +10,51 @@
 
 use bytemuck::{Pod, Zeroable};
 
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug)]
+pub struct FixedU8Array<const N: usize>(pub [u8; N]);
+
+unsafe impl<const N: usize> bytemuck::Pod for FixedU8Array<N> {}
+unsafe impl<const N: usize> bytemuck::Zeroable for FixedU8Array<N> {}
+
+impl<const N: usize> Default for FixedU8Array<N> {
+    fn default() -> Self {
+        Self([0; N])
+    }
+}
+
+impl<const N: usize> From<[u8; N]> for FixedU8Array<N> {
+    fn from(value: [u8; N]) -> Self {
+        Self(value)
+    }
+}
+
+impl<const N: usize> AsRef<[u8]> for FixedU8Array<N> {
+    fn as_ref(&self) -> &[u8] {
+        self.0.as_ref()
+    }
+}
+
+impl<const N: usize> AsMut<[u8]> for FixedU8Array<N> {
+    fn as_mut(&mut self) -> &mut [u8] {
+        self.0.as_mut()
+    }
+}
+
+impl<const N: usize> core::ops::Deref for FixedU8Array<N> {
+    type Target = [u8; N];
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<const N: usize> core::ops::DerefMut for FixedU8Array<N> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
 pub const ABI_VERSION: u16 = 2;
 
 pub const EVENT_EXEC_ATTEMPT: u16 = 1;
@@ -65,9 +110,9 @@ pub struct ExecEvent {
     pub tid: u32,
     pub uid: u32,
     pub gid: u32,
-    pub comm: [u8; TASK_COMM_LEN],
-    pub filename: [u8; EXEC_PATH_LEN],
-    pub argv: [u8; EXEC_ARG_BYTES],
+    pub comm: FixedU8Array<TASK_COMM_LEN>,
+    pub filename: FixedU8Array<EXEC_PATH_LEN>,
+    pub argv: FixedU8Array<EXEC_ARG_BYTES>,
     pub argc: u8,
     pub reserved: [u8; 7],
 }
@@ -83,7 +128,7 @@ pub struct ExecAttemptResultEvent {
     pub uid: u32,
     pub operation: u32,
     pub result: i64,
-    pub comm: [u8; TASK_COMM_LEN],
+    pub comm: FixedU8Array<TASK_COMM_LEN>,
 }
 
 /// `init_module(2)` / `finit_module(2)` entry telemetry. It deliberately does
@@ -100,7 +145,7 @@ pub struct ModuleSyscallEvent {
     pub fd: i32,
     pub module_flags: u32,
     pub image_size: u64,
-    pub comm: [u8; TASK_COMM_LEN],
+    pub comm: FixedU8Array<TASK_COMM_LEN>,
 }
 
 /// Syscall exit status for a module insertion attempt. `result == 0` means the
@@ -114,7 +159,7 @@ pub struct ModuleSyscallResultEvent {
     pub uid: u32,
     pub operation: u32,
     pub result: i64,
-    pub comm: [u8; TASK_COMM_LEN],
+    pub comm: FixedU8Array<TASK_COMM_LEN>,
 }
 
 /// Entry metadata for `getdents64`. No dirent contents are copied.
@@ -127,7 +172,7 @@ pub struct DirectoryReadEnterEvent {
     pub uid: u32,
     pub dirfd: i32,
     pub requested_bytes: u32,
-    pub comm: [u8; TASK_COMM_LEN],
+    pub comm: FixedU8Array<TASK_COMM_LEN>,
     pub reserved: u32,
 }
 
@@ -141,7 +186,7 @@ pub struct DirectoryReadExitEvent {
     pub pid: u32,
     pub tid: u32,
     pub uid: u32,
-    pub comm: [u8; TASK_COMM_LEN],
+    pub comm: FixedU8Array<TASK_COMM_LEN>,
     pub reserved: u32,
 }
 
@@ -154,8 +199,8 @@ pub struct ProcessForkEvent {
     pub parent_tid: u32,
     pub child_tid: u32,
     pub uid: u32,
-    pub parent_comm: [u8; TASK_COMM_LEN],
-    pub child_comm: [u8; TASK_COMM_LEN],
+    pub parent_comm: FixedU8Array<TASK_COMM_LEN>,
+    pub child_comm: FixedU8Array<TASK_COMM_LEN>,
     pub reserved: u32,
 }
 
@@ -167,7 +212,7 @@ pub struct ProcessExitEvent {
     pub pid: u32,
     pub tid: u32,
     pub uid: u32,
-    pub comm: [u8; TASK_COMM_LEN],
+    pub comm: FixedU8Array<TASK_COMM_LEN>,
     pub reserved: u32,
 }
 
@@ -181,7 +226,7 @@ pub struct ProcessExecEvent {
     pub tid: u32,
     pub uid: u32,
     pub old_pid: u32,
-    pub comm: [u8; TASK_COMM_LEN],
+    pub comm: FixedU8Array<TASK_COMM_LEN>,
 }
 
 /// Kernel module became live, observed through `module:module_load`.
@@ -194,7 +239,7 @@ pub struct ModuleLoadEvent {
     pub tid: u32,
     pub uid: u32,
     pub taints: u32,
-    pub comm: [u8; TASK_COMM_LEN],
+    pub comm: FixedU8Array<TASK_COMM_LEN>,
 }
 
 // These compile-time assertions protect the cross-boundary ABI and keep all

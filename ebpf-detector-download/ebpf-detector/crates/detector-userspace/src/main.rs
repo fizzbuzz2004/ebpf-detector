@@ -936,7 +936,7 @@ mod tests {
             tid: 100,
             uid: 0,
             old_pid: 101,
-            comm: [0; 16],
+            comm: [0; 16].into(),
         };
         report_process_exec(&event, &mut state);
         assert!(!state.exec_attempts_by_tid.contains_key(&101));
