@@ -1,0 +1,40 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/detector-common",
+    "crates/detector-ebpf",
+    "crates/detector-userspace",
+]
+default-members = [
+    "crates/detector-common",
+    "crates/detector-userspace",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+rust-version = "1.87"
+
+[workspace.dependencies]
+# Pin Aya versions to a known-compatible release family used by aya-template.
+aya = { version = "=0.14.0", default-features = false }
+aya-build = { version = "=0.2.1", default-features = false }
+aya-ebpf = { version = "=0.2.1", default-features = false }
+anyhow = "1.0"
+bytemuck = { version = "1.23", default-features = false, features = ["derive"] }
+cargo_metadata = { version = "0.23", default-features = false }
+tokio = { version = "1.53", default-features = false, features = ["macros", "rt-multi-thread", "signal", "net", "time"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "json"] }
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+panic = "abort"
+strip = "symbols"
+
+[profile.release.package.detector-ebpf]
+debug = 2
+codegen-units = 1
+strip = false

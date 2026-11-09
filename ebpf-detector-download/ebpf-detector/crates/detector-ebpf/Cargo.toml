@@ -1,0 +1,15 @@
+[package]
+name = "detector-ebpf"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "detector-ebpf"
+path = "src/main.rs"
+
+[dependencies]
+aya-ebpf.workspace = true
+bytemuck.workspace = true
+detector-common = { path = "../detector-common" }

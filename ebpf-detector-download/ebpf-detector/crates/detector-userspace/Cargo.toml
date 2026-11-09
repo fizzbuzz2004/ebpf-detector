@@ -1,0 +1,25 @@
+[package]
+name = "detector-userspace"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+build = "build.rs"
+
+[[bin]]
+name = "detector-userspace"
+path = "src/main.rs"
+
+[dependencies]
+aya.workspace = true
+anyhow.workspace = true
+bytemuck.workspace = true
+detector-common = { path = "../detector-common" }
+tokio.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+
+[build-dependencies]
+anyhow.workspace = true
+aya-build.workspace = true
+cargo_metadata.workspace = true

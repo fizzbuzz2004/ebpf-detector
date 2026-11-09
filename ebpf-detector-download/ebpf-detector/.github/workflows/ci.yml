@@ -1,0 +1,39 @@
+name: Rust and eBPF CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  linux-build-and-test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install native dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential clang llvm libelf-dev pkg-config
+
+      - name: Install Rust toolchains
+        run: |
+          rustup toolchain install stable --profile minimal --component rustfmt --component clippy
+          rustup toolchain install nightly --profile minimal --component rust-src
+
+      - name: Install bpf-linker
+        run: cargo +stable install bpf-linker --version 0.12.0 --locked
+
+      - name: Format
+        run: cargo +stable fmt --all -- --check
+
+      - name: Build
+        run: cargo +stable build --release -p detector-userspace
+
+      - name: Tests
+        run: cargo +stable test -p detector-common -p detector-userspace
+
+      - name: Clippy
+        run: cargo +stable clippy -p detector-common -p detector-userspace --all-targets -- -D warnings

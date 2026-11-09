@@ -1,0 +1,35 @@
+[Unit]
+Description=Rust Aya eBPF Security Detector
+Documentation=README.md
+After=local-fs.target
+
+[Service]
+Type=simple
+User=root
+Environment=RUST_LOG=info
+ExecStart=/usr/local/sbin/detector-userspace
+Restart=on-failure
+RestartSec=3s
+
+# Restrict the service to the capabilities typically needed for BPF loading.
+# CAP_SYS_ADMIN is retained as a compatibility fallback for older kernels or
+# distributions whose BPF policy still requires it; remove it after validation
+# on the exact deployment kernel.
+CapabilityBoundingSet=CAP_BPF CAP_PERFMON CAP_SYS_RESOURCE CAP_SYS_ADMIN
+AmbientCapabilities=CAP_BPF CAP_PERFMON CAP_SYS_RESOURCE CAP_SYS_ADMIN
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=read-only
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+ProtectKernelLogs=yes
+LockPersonality=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+SystemCallArchitectures=native
+
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
