@@ -8,17 +8,17 @@ A Linux kernel telemetry and detection sensor written in Rust. The current imple
 
 ```mermaid
 flowchart LR
-    subgraph Kernel[Linux Kernel]
-      A[sys_enter_execve / execveat]
-      A2[sys_exit_execve / execveat]
-      B[sched_process_fork / exit / exec]
-      C[sys_enter/exit_init_module + finit_module]
-      D[module_load]
-      E[sys_enter/exit_getdents64]
-      P[detector-ebpf<br/>no_std / Aya]
-      R[(16 MiB BPF RingBuf)]
-      L[(Per-CPU lost counter)]
-      X[(Per-CPU probe-error counter)]
+    subgraph Kernel["Linux Kernel"]
+      A["sys_enter_execve / execveat"]
+      A2["sys_exit_execve / execveat"]
+      B["sched_process_fork / exit / exec"]
+      C["sys_enter/exit_init_module + finit_module"]
+      D["module_load"]
+      E["sys_enter/exit_getdents64"]
+      P["detector-ebpf<br/>no_std / Aya"]
+      R["(16 MiB BPF RingBuf)"]
+      L["(Per-CPU lost counter)"]
+      X["(Per-CPU probe-error counter)"]
       A --> P
       A2 --> P
       B --> P
@@ -29,13 +29,13 @@ flowchart LR
       P --> L
       P --> X
     end
-    R --> U[detector-userspace<br/>Tokio AsyncFd]
+    R --> U["detector-userspace<br/>Tokio AsyncFd"]
     L --> U
     X --> U
-    U --> V[ABI / length / version validation]
-    V --> H[Process and module correlation]
-    H --> J[JSON logs via tracing]
-    CMM[detector-common<br/>repr(C) ABI v2] --- P
+    U --> V["ABI / length / version validation"]
+    V --> H["Process and module correlation"]
+    H --> J["JSON logs via tracing"]
+    CMM["detector-common<br/>repr(C) ABI v2"] --- P
     CMM --- V
 ```
 
